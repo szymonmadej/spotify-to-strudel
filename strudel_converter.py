@@ -11,6 +11,9 @@ MODE_NAMES = {
     1: 'major'
 }
 
+# Strudel drum bank
+DRUM_BANK = "RolandTR909"
+
 
 class StrudelConverter:
     """Convert Spotify audio features to Strudel music code"""
@@ -29,29 +32,58 @@ class StrudelConverter:
         """Get scale name from mode"""
         return MODE_NAMES.get(mode, 'major')
     
-    def _calculate_cps(self, tempo: float) -> float:
-        """Calculate cycles per second from BPM"""
-        # BPM to cycles per second
-        # At 120 BPM and 4/4 time: 1 cycle = 1 bar = 4 beats
-        return tempo / 120 / 4
+    def _calculate_cpm(self, tempo: float) -> float:
+        """Calculate cycles per minute from BPM"""
+        # In Strudel, 1 cycle = 1 bar (typically 4 beats)
+        # So CPM = BPM / 4
+        return tempo / 4
+    
+    def _generate_kick_pattern(self) -> str:
+        """Generate kick pattern based on energy"""
+        energy = self.audio_features['energy']
+        
+        if energy > 0.7:
+            # Energetic: steady kick
+            return 's("bd*4").bank("RolandTR909").gain(0.85)'
+        elif energy > 0.4:
+            # Medium: kick with some variation
+            return 's("bd*4, ~ bd").bank("RolandTR909").gain(0.85)'
+        else:
+            # Low energy: sparse kick
+            return 's("bd ~ bd ~").bank("RolandTR909").gain(0.85)'
+    
+    def _generate_hihat_pattern(self) -> str:
+        """Generate hi-hat pattern based on energy"""
+        energy = self.audio_features['energy']
+        danceability = self.audio_features['danceability']
+        
+        if energy > 0.7 and danceability > 0.7:
+            # Very energetic and danceable
+            return 's("hh*16").bank("RolandTR909").gain(0.4).hpf(6000)'
+        elif energy > 0.5:
+            # Moderate
+            return 's("hh*8").bank("RolandTR909").gain(0.35).hpf(6000)'
+        else:
+            # Sparse
+            return 's("hh*4").bank("RolandTR909").gain(0.3).hpf(6000)'
     
     def _generate_bass_pattern(self) -> str:
-        """Generate a bass pattern based on audio features"""
-        root = self._get_note_name(self.audio_features['key'], octave=1)
+        """Generate bass pattern based on audio features"""
+        root = self._get_note_name(self.audio_features['key'], octave=2)
         energy = self.audio_features['energy']
         
         # More energetic = faster bass pattern
         if energy > 0.7:
-            # Energetic: fast, repeated notes
-            pattern = f'"{root}2 ~ {root}4 ~ {root}4"'
+            # Fast repeating
+            pattern = f'"{root} ~ {root} ~"'
         elif energy > 0.4:
-            # Medium: moderate pattern
-            pattern = f'"{root}2 ~ ~ {root}4"'
-        else:
-            # Low energy: sparse pattern
+            # Medium
             pattern = f'"{root} ~ ~ ~"'
+        else:
+            # Sparse
+            pattern = f'"{root}"'
         
-        return f"bass = s('sine').note({pattern}).gain(0.3)"
+        return f'note({pattern}).s("sawtooth").lpf(350).decay(0.2).gain(0.55)'
     
     def _generate_chord_pattern(self) -> str:
         """Generate chord pattern based on key and mode"""
@@ -63,37 +95,37 @@ class StrudelConverter:
         
         # Generate chord intervals based on danceability
         if danceability > 0.7:
-            # Very danceable: complex chords
-            chords = '"[0,2,4]2 [2,4,6]2 [4,6,8]2 [2,4,6]2"'
+            # Very danceable: active chords
+            chords = '"[0,2,4] [2,4,6]"'
         elif danceability > 0.4:
             # Moderately danceable
-            chords = '"[0,2,4]2 ~ ~ [2,4,6]2"'
+            chords = '"[0,2,4] ~ ~ [1,3,5]"'
         else:
             # Less danceable: simpler chords
-            chords = '"[0,2,4]2 ~ ~ ~"'
+            chords = '"[0,2,4] ~"'
         
-        return f"chords = s('sine').scale('[{root_note}] {mode_name}').note({chords}).gain(0.4)"
+        return f'note({chords}).scale("[{root_note}] {mode_name}").s("sawtooth").lpf(1200).lpq(2).attack(0.3).release(0.8).gain(0.3).room(0.4)'
     
     def _generate_melody_pattern(self) -> str:
         """Generate melody pattern based on valence and energy"""
         valence = self.audio_features['valence']
         energy = self.audio_features['energy']
         key = self.audio_features['key']
-        root_note = self._get_note_name(key)
+        root_note = self._get_note_name(key, octave=4)
         mode_name = self._get_scale_name(self.audio_features['mode'])
         
         # Happy/positive = higher notes, energetic = faster
         if valence > 0.6 and energy > 0.6:
-            # Happy and energetic: fast, high notes
-            melody = '"[0,4]4 [2,5]4 [4,7]4 [5,9]4"'
+            # Happy and energetic: active melody
+            melody = '"0 2 4 5"'
         elif valence > 0.4:
             # Moderately happy
-            melody = '"0 2 4 5 4 2"'
+            melody = '"0 ~ 2 ~ 4"'
         else:
-            # Sad or melancholic: slower, lower
-            melody = '"0 ~ 2 ~ 4 ~"'
+            # Sad or melancholic
+            melody = '"0 ~ ~ ~"'
         
-        return f"melody = s('sine').scale('[{root_note}] {mode_name}').note({melody}).gain(0.3)"
+        return f'note({melody}).scale("[{root_note}] {mode_name}").s("triangle").decay(0.15).gain(0.25).delay(0.3).delaytime(0.1875).delayfeedback(0.4)'
     
     def generate(self) -> str:
         """Generate complete Strudel code"""
@@ -106,29 +138,34 @@ class StrudelConverter:
         self.code.append(f"// Key: {self._get_note_name(self.audio_features['key'])} {self._get_scale_name(self.audio_features['mode'])}")
         self.code.append("")
         
-        # Tempo setting
-        cps = self._calculate_cps(self.audio_features['tempo'])
-        self.code.append(f"setcps({cps:.4f}) // {self.audio_features['tempo']} BPM")
+        # Tempo setting - use setcpm (cycles per minute)
+        cpm = self._calculate_cpm(self.audio_features['tempo'])
+        self.code.append(f"setcpm({cpm:.1f}) // {self.audio_features['tempo']} BPM")
+        self.code.append("")
+        
+        # Kick pattern
+        self.code.append("// Kick drum")
+        self.code.append(f"$: {self._generate_kick_pattern()}")
+        self.code.append("")
+        
+        # Hi-hat pattern
+        self.code.append("// Hi-hats")
+        self.code.append(f"$: {self._generate_hihat_pattern()}")
         self.code.append("")
         
         # Bass pattern
-        self.code.append("// Bass pattern")
-        self.code.append(self._generate_bass_pattern())
+        self.code.append("// Bass line")
+        self.code.append(f"$: {self._generate_bass_pattern()}")
         self.code.append("")
         
         # Chord pattern
         self.code.append("// Chord progression")
-        self.code.append(self._generate_chord_pattern())
+        self.code.append(f"$: {self._generate_chord_pattern()}")
         self.code.append("")
         
         # Melody pattern
         self.code.append("// Melody")
-        self.code.append(self._generate_melody_pattern())
-        self.code.append("")
-        
-        # Combined pattern
-        self.code.append("// Combined arrangement")
-        self.code.append("stack(bass, chords, melody)")
+        self.code.append(f"$: {self._generate_melody_pattern()}")
         self.code.append("")
         
         # Audio features as comments
