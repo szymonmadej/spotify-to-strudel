@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
 Spotify to Strudel - Convert Spotify tracks to Strudel music programming language
+Uses Last.fm API for audio analysis when Spotify audio-features is not accessible
 """
 
 import sys
 import argparse
 from spotify_handler import SpotifyHandler
+from lastfm_handler import LastFMHandler
 from strudel_converter import StrudelConverter
 
 
@@ -54,15 +56,58 @@ def main():
         
         print(f"✅ Found: {track_info['name']} by {track_info['artist']}")
         
-        # Fetch audio features
+        # Try to get audio features from Spotify first
+        audio_features = None
         print(f"📊 Analyzing audio features...")
         audio_features = spotify.get_audio_features(track_id)
-        if not audio_features:
-            print("❌ Could not fetch audio features")
-            return 1
         
-        print(f"✅ Tempo: {audio_features['tempo']} BPM")
-        print(f"✅ Key: {audio_features['key']}")
+        # If Spotify audio-features fails, use Last.fm
+        if not audio_features:
+            print("⚠️  Spotify audio-features unavailable, using Last.fm analysis...")
+            try:
+                lastfm = LastFMHandler()
+                tags = lastfm.get_track_tags(track_info['artist'], track_info['name'])
+                
+                if tags:
+                    print(f"✅ Found genres from Last.fm: {', '.join(tags[:3])}")
+                    audio_features = lastfm.infer_audio_features_from_tags(tags)
+                else:
+                    print("⚠️  No tags found on Last.fm, using defaults")
+                    audio_features = lastfm.infer_audio_features_from_tags([])
+                
+            except ValueError as e:
+                print(f"⚠️  Last.fm error: {e}")
+                print("⚠️  Using default audio features")
+                audio_features = {
+                    'tempo': 120,
+                    'key': 0,
+                    'mode': 1,
+                    'energy': 0.5,
+                    'danceability': 0.5,
+                    'valence': 0.5,
+                    'acousticness': 0.3,
+                    'instrumentalness': 0.0,
+                    'liveness': 0.2,
+                    'loudness': -5.0
+                }
+            except Exception as e:
+                print(f"⚠️  Error connecting to Last.fm: {e}")
+                print("⚠️  Using default audio features")
+                audio_features = {
+                    'tempo': 120,
+                    'key': 0,
+                    'mode': 1,
+                    'energy': 0.5,
+                    'danceability': 0.5,
+                    'valence': 0.5,
+                    'acousticness': 0.3,
+                    'instrumentalness': 0.0,
+                    'liveness': 0.2,
+                    'loudness': -5.0
+                }
+        else:
+            print(f"✅ Tempo: {audio_features['tempo']} BPM")
+            print(f"✅ Key: {audio_features['key']}")
         
         # Convert to Strudel
         print(f"🎼 Generating Strudel code...")
@@ -84,10 +129,12 @@ def main():
         
     except ValueError as e:
         print(f"❌ Configuration error: {e}")
-        print("\nPlease set up your .env file with Spotify API credentials:")
+        print("\nPlease set up your .env file with required API credentials:")
         print("  1. Create .env file from .env.example")
-        print("  2. Get credentials from https://developer.spotify.com/dashboard")
+        print("  2. Get Spotify credentials from https://developer.spotify.com/dashboard")
         print("  3. Add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET")
+        print("  4. Get Last.fm API key from https://www.last.fm/api/account/create")
+        print("  5. Add LASTFM_API_KEY to .env")
         return 1
     except Exception as e:
         print(f"❌ Error: {e}")
