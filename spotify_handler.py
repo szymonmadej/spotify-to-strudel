@@ -55,33 +55,55 @@ class SpotifyHandler:
             track_id: Spotify track ID
             
         Returns:
-            dict with audio features
+            dict with audio features, or default values if not available
         """
+        # Default audio features (fallback values)
+        default_features = {
+            'tempo': 120,
+            'key': 0,
+            'mode': 1,  # 0 = minor, 1 = major
+            'time_signature': 4,
+            'energy': 0.5,
+            'danceability': 0.5,
+            'valence': 0.5,  # musical positiveness
+            'acousticness': 0.5,
+            'instrumentalness': 0.0,
+            'liveness': 0.5,
+            'loudness': 0.0,
+            'speechiness': 0.0
+        }
+        
         try:
             features = self.sp.audio_features(track_id)[0]
             if not features:
-                print("No audio features found for this track")
-                return None
+                print("⚠️  No audio features found, using defaults")
+                return default_features
             
             return {
-                'tempo': features.get('tempo', 120),
-                'key': features.get('key', 0),
-                'mode': features.get('mode', 1),  # 0 = minor, 1 = major
-                'time_signature': features.get('time_signature', 4),
-                'energy': features.get('energy', 0.5),
-                'danceability': features.get('danceability', 0.5),
-                'valence': features.get('valence', 0.5),  # musical positiveness
-                'acousticness': features.get('acousticness', 0.5),
-                'instrumentalness': features.get('instrumentalness', 0.0),
-                'liveness': features.get('liveness', 0.5),
-                'loudness': features.get('loudness', 0.0),
-                'speechiness': features.get('speechiness', 0.0)
+                'tempo': features.get('tempo', default_features['tempo']),
+                'key': features.get('key', default_features['key']),
+                'mode': features.get('mode', default_features['mode']),
+                'time_signature': features.get('time_signature', default_features['time_signature']),
+                'energy': features.get('energy', default_features['energy']),
+                'danceability': features.get('danceability', default_features['danceability']),
+                'valence': features.get('valence', default_features['valence']),
+                'acousticness': features.get('acousticness', default_features['acousticness']),
+                'instrumentalness': features.get('instrumentalness', default_features['instrumentalness']),
+                'liveness': features.get('liveness', default_features['liveness']),
+                'loudness': features.get('loudness', default_features['loudness']),
+                'speechiness': features.get('speechiness', default_features['speechiness'])
             }
+        except spotipy.exceptions.SpotifyException as e:
+            if e.http_status == 403:
+                print("⚠️  Access to audio features denied (403), using default values")
+                print("    This might be due to API permissions or regional restrictions")
+            else:
+                print(f"Error fetching audio features: {e}")
+            return default_features
         except Exception as e:
-            print(f"Error fetching audio features: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
+            print(f"⚠️  Could not fetch audio features ({type(e).__name__}), using defaults")
+            print(f"    Error: {e}")
+            return default_features
     
     def get_track_by_url(self, url):
         """
