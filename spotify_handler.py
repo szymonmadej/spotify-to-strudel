@@ -30,19 +30,21 @@ class SpotifyHandler:
             track_id: Spotify track ID
             
         Returns:
-            dict with track info (name, artist, tempo, key, etc.)
+            dict with track info (name, artist, duration, etc.)
         """
         try:
             track = self.sp.track(track_id)
             return {
-                'name': track['name'],
-                'artist': track['artists'][0]['name'],
-                'duration_ms': track['duration_ms'],
-                'popularity': track['popularity'],
-                'external_urls': track['external_urls']['spotify']
+                'name': track.get('name', 'Unknown'),
+                'artist': track['artists'][0]['name'] if track.get('artists') else 'Unknown',
+                'duration_ms': track.get('duration_ms', 0),
+                'popularity': track.get('popularity', 0),
+                'external_urls': track.get('external_urls', {}).get('spotify', '')
             }
         except Exception as e:
             print(f"Error fetching track info: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def get_audio_features(self, track_id):
@@ -57,22 +59,28 @@ class SpotifyHandler:
         """
         try:
             features = self.sp.audio_features(track_id)[0]
+            if not features:
+                print("No audio features found for this track")
+                return None
+            
             return {
-                'tempo': features['tempo'],
-                'key': features['key'],
-                'mode': features['mode'],  # 0 = minor, 1 = major
-                'time_signature': features['time_signature'],
-                'energy': features['energy'],
-                'danceability': features['danceability'],
-                'valence': features['valence'],  # musical positiveness
-                'acousticness': features['acousticness'],
-                'instrumentalness': features['instrumentalness'],
-                'liveness': features['liveness'],
-                'loudness': features['loudness'],
-                'speechiness': features['speechiness']
+                'tempo': features.get('tempo', 120),
+                'key': features.get('key', 0),
+                'mode': features.get('mode', 1),  # 0 = minor, 1 = major
+                'time_signature': features.get('time_signature', 4),
+                'energy': features.get('energy', 0.5),
+                'danceability': features.get('danceability', 0.5),
+                'valence': features.get('valence', 0.5),  # musical positiveness
+                'acousticness': features.get('acousticness', 0.5),
+                'instrumentalness': features.get('instrumentalness', 0.0),
+                'liveness': features.get('liveness', 0.5),
+                'loudness': features.get('loudness', 0.0),
+                'speechiness': features.get('speechiness', 0.0)
             }
         except Exception as e:
             print(f"Error fetching audio features: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def get_track_by_url(self, url):
