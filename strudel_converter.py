@@ -45,11 +45,11 @@ class StrudelConverter:
         
         # More energetic = faster bass pattern
         if energy > 0.7:
-            pattern = f'"{root} . {root}:0.5 . {root}:0.5"'
+            pattern = f'"{root} - {root}:0.5 - {root}:0.5"'
         elif energy > 0.4:
-            pattern = f'"{root} . . {root}:0.5"'
+            pattern = f'"{root} - - {root}:0.5"'
         else:
-            pattern = f'"{root} . . ."'
+            pattern = f'"{root} - - -"'
         
         return f"bass = s('sine').note({pattern}.fast(2)).gain(0.3)"
     
@@ -65,9 +65,9 @@ class StrudelConverter:
         if danceability > 0.7:
             chords = '"[0,2,4] [1,3,5] [2,4,6] [1,3,5]"'
         elif danceability > 0.4:
-            chords = '"[0,2,4] . . [1,3,5]"'
+            chords = '"[0,2,4] - - [1,3,5]"'
         else:
-            chords = '"[0,2,4] . . ."'
+            chords = '"[0,2,4] - - -"'
         
         return f"chords = s('sine').scale('[{root_note}] {mode_name}').note({chords}.fast(1)).gain(0.4)"
     
@@ -87,7 +87,7 @@ class StrudelConverter:
             melody = '"0 2 4 5 4 2"'
             speed = ".fast(1.5)"
         else:
-            melody = '"0 . 2 . 4 ."'
+            melody = '"0 - 2 - 4 -"'
             speed = ".fast(1)"
         
         return f"melody = s('sine').scale('[{root_note}] {mode_name}').note({melody}{speed}).gain(0.3)"
