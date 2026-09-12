@@ -29,7 +29,7 @@ class StrudelConverter:
         """Generate a scale pattern based on key and mode"""
         root_note = self._get_note_name(key)
         mode_name = MODE_NAMES.get(mode, 'major')
-        return f"scale(\"[{root_note}] {mode_name}\")"
+        return f"scale('[{root_note}] {mode_name}')"
     
     def _calculate_note_duration(self, tempo: float) -> str:
         """Calculate note durations based on tempo"""
@@ -51,13 +51,14 @@ class StrudelConverter:
         else:
             pattern = f'"{root} . . ."'
         
-        return f"bass = sound('sine')\n  |> note({pattern}.fast(2))\n  |> gain(0.3)"
+        return f"bass = s('sine').note({pattern}.fast(2)).gain(0.3)"
     
     def _generate_chord_pattern(self) -> str:
         """Generate chord pattern based on key and mode"""
         key = self.audio_features['key']
         mode = self.audio_features['mode']
-        scale = self._get_scale_pattern(key, mode)
+        root_note = self._get_note_name(key)
+        mode_name = MODE_NAMES.get(mode, 'major')
         danceability = self.audio_features['danceability']
         
         # Generate chords based on danceability
@@ -68,13 +69,15 @@ class StrudelConverter:
         else:
             chords = '"[0,2,4] . . ."'
         
-        return f"chords = sound('sine')\n  |> {scale}\n  |> note({chords}.fast(1))\n  |> gain(0.4)"
+        return f"chords = s('sine').scale('[{root_note}] {mode_name}').note({chords}.fast(1)).gain(0.4)"
     
     def _generate_melody_pattern(self) -> str:
         """Generate melody pattern based on valence and energy"""
         valence = self.audio_features['valence']
         energy = self.audio_features['energy']
         key = self.audio_features['key']
+        root_note = self._get_note_name(key)
+        mode_name = MODE_NAMES.get(self.audio_features['mode'], 'major')
         
         # Happy/positive = higher notes, energetic = faster
         if valence > 0.6 and energy > 0.6:
@@ -87,9 +90,7 @@ class StrudelConverter:
             melody = '"0 . 2 . 4 ."'
             speed = ".fast(1)"
         
-        scale = self._get_scale_pattern(key, self.audio_features['mode'])
-        
-        return f"melody = sound('sine')\n  |> {scale}\n  |> note({melody}{speed})\n  |> gain(0.3)"
+        return f"melody = s('sine').scale('[{root_note}] {mode_name}').note({melody}{speed}).gain(0.3)"
     
     def generate(self) -> str:
         """Generate complete Strudel code"""
@@ -126,7 +127,6 @@ class StrudelConverter:
         self.code.append("")
         
         # Combined pattern
-        acousticness = self.audio_features['acousticness']
         self.code.append("// Combined arrangement")
         self.code.append("stack(")
         self.code.append("  bass,")
