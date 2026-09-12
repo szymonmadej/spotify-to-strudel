@@ -1,6 +1,7 @@
 import requests
 import os
 from dotenv import load_dotenv
+import re
 
 load_dotenv()
 
@@ -14,6 +15,28 @@ class LastFMHandler:
         
         if not self.api_key:
             raise ValueError("LASTFM_API_KEY must be set in .env file")
+    
+    def parse_lastfm_url(self, url: str):
+        """
+        Parse Last.fm URL to extract artist and track
+        
+        Args:
+            url: Last.fm URL like https://www.last.fm/music/Artist/Track
+            
+        Returns:
+            tuple (artist, track) or None if invalid
+        """
+        try:
+            # Pattern: https://www.last.fm/music/Artist/Track or /music/Artist/+Track
+            match = re.search(r'last\.fm/music/([^/]+)/(.+?)(?:\s*$|\s*\+|$)', url)
+            if match:
+                artist = match.group(1).replace('+', ' ')
+                track = match.group(2).replace('+', ' ').split(' - ')[0].strip()
+                return (artist, track)
+        except Exception as e:
+            print(f"Error parsing Last.fm URL: {e}")
+        
+        return None
     
     def search_track(self, artist: str, track: str):
         """
@@ -36,7 +59,7 @@ class LastFMHandler:
                 'limit': 1
             }
             
-            response = requests.get(self.base_url, params=params)
+            response = requests.get(self.base_url, params=params, timeout=5)
             response.raise_for_status()
             data = response.json()
             
@@ -76,7 +99,7 @@ class LastFMHandler:
             return [tag['name'] for tag in tags[:5]] if tags else []
             
         except Exception as e:
-            print(f"Debug: Error fetching tags from Last.fm: {e}")
+            print(f"Debug: Error fetching tags from Last.fm for {artist} - {track}: {e}")
             return []
     
     def get_artist_info(self, artist: str):
