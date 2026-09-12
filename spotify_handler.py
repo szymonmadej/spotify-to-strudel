@@ -31,7 +31,7 @@ class SpotifyHandler:
             track_id: Spotify track ID
             
         Returns:
-            dict with track info (name, artist, duration, etc.)
+            dict with track info (name, artist, duration, preview_url, etc.)
         """
         try:
             track = self.sp.track(track_id)
@@ -40,6 +40,7 @@ class SpotifyHandler:
                 'artist': track['artists'][0]['name'] if track.get('artists') else 'Unknown',
                 'duration_ms': track.get('duration_ms', 0),
                 'popularity': track.get('popularity', 0),
+                'preview_url': track.get('preview_url'),  # 30-second preview MP3
                 'external_urls': track.get('external_urls', {}).get('spotify', '')
             }
         except Exception as e:
