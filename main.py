@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
 Spotify to Strudel - Convert Spotify tracks to Strudel music programming language
-Uses Last.fm API for audio analysis when Spotify audio-features is not accessible
+Uses audio analysis from preview MP3 or Last.fm API for audio features
 """
 
 import sys
 import argparse
 from spotify_handler import SpotifyHandler
 from lastfm_handler import LastFMHandler
+from audio_analyzer import AudioAnalyzer
 from strudel_converter import StrudelConverter
 
 
@@ -29,6 +30,11 @@ def main():
         '--print',
         action='store_true',
         help='Print generated code to stdout'
+    )
+    parser.add_argument(
+        '--skip-audio',
+        action='store_true',
+        help='Skip audio analysis, use metadata only'
     )
     
     args = parser.parse_args()
@@ -76,7 +82,7 @@ def main():
             
             print(f"✅ Tempo: {audio_features['tempo']} BPM")
             print(f"✅ Energy: {audio_features['energy']:.2f}")
-            
+        
         # ==================== SPOTIFY FLOW ====================
         else:
             print("🎵 Using Spotify data source...")
@@ -103,57 +109,78 @@ def main():
             
             print(f"✅ Found: {track_info['name']} by {track_info['artist']}")
             
-            # Try to get audio features from Spotify first
-            print(f"📊 Analyzing audio features...")
-            audio_features = spotify.get_audio_features(track_id)
+            # Try to analyze from audio preview first
+            audio_features = None
+            if track_info.get('preview_url') and not args.skip_audio:
+                print(f"📥 Downloading audio preview...")
+                analyzer = AudioAnalyzer()
+                analyzed_features = analyzer.download_and_analyze(track_info['preview_url'])
+                
+                if analyzed_features:
+                    print(f"✅ Audio analysis complete!")
+                    print(f"   Tempo: {analyzed_features['tempo']:.0f} BPM")
+                    print(f"   Energy: {analyzed_features['energy']:.2f}")
+                    print(f"   Brightness: {analyzed_features['brightness']:.2f}")
+                    print(f"   Danceability: {analyzed_features['danceability']:.2f}")
+                    print(f"   Valence: {analyzed_features['valence']:.2f}")
+                    audio_features = analyzed_features
+                else:
+                    print("⚠️  Audio analysis failed, trying Spotify features...")
             
-            # If Spotify audio-features fails, use Last.fm
+            # Fallback to Spotify audio-features if audio analysis failed
             if not audio_features:
-                print("⚠️  Spotify audio-features unavailable, using Last.fm analysis...")
-                try:
-                    lastfm = LastFMHandler()
-                    tags = lastfm.get_track_tags(track_info['artist'], track_info['name'])
-                    
-                    if tags:
-                        print(f"✅ Found genres from Last.fm: {', '.join(tags[:3])}")
-                        audio_features = lastfm.infer_audio_features_from_tags(tags)
-                    else:
-                        print("⚠️  No tags found on Last.fm, using defaults")
-                        audio_features = lastfm.infer_audio_features_from_tags([])
-                    
-                except ValueError as e:
-                    print(f"⚠️  Last.fm error: {e}")
-                    print("⚠️  Using default audio features")
-                    audio_features = {
-                        'tempo': 120,
-                        'key': 0,
-                        'mode': 1,
-                        'energy': 0.5,
-                        'danceability': 0.5,
-                        'valence': 0.5,
-                        'acousticness': 0.3,
-                        'instrumentalness': 0.0,
-                        'liveness': 0.2,
-                        'loudness': -5.0
-                    }
-                except Exception as e:
-                    print(f"⚠️  Error connecting to Last.fm: {e}")
-                    print("⚠️  Using default audio features")
-                    audio_features = {
-                        'tempo': 120,
-                        'key': 0,
-                        'mode': 1,
-                        'energy': 0.5,
-                        'danceability': 0.5,
-                        'valence': 0.5,
-                        'acousticness': 0.3,
-                        'instrumentalness': 0.0,
-                        'liveness': 0.2,
-                        'loudness': -5.0
-                    }
-            else:
-                print(f"✅ Tempo: {audio_features['tempo']} BPM")
-                print(f"✅ Key: {audio_features['key']}")
+                print(f"📊 Fetching Spotify audio features...")
+                spotify_features = spotify.get_audio_features(track_id)
+                
+                if spotify_features:
+                    print(f"✅ Spotify features available")
+                    print(f"   Tempo: {spotify_features['tempo']} BPM")
+                    print(f"   Energy: {spotify_features['energy']:.2f}")
+                    audio_features = spotify_features
+                else:
+                    # Use Last.fm as final fallback
+                    print("⚠️  Spotify features unavailable, using Last.fm analysis...")
+                    try:
+                        lastfm = LastFMHandler()
+                        tags = lastfm.get_track_tags(track_info['artist'], track_info['name'])
+                        
+                        if tags:
+                            print(f"✅ Found genres from Last.fm: {', '.join(tags[:3])}")
+                            audio_features = lastfm.infer_audio_features_from_tags(tags)
+                        else:
+                            print("⚠️  No tags found on Last.fm, using defaults")
+                            audio_features = lastfm.infer_audio_features_from_tags([])
+                        
+                    except ValueError as e:
+                        print(f"⚠️  Last.fm error: {e}")
+                        print("⚠️  Using default audio features")
+                        audio_features = {
+                            'tempo': 120,
+                            'key': 0,
+                            'mode': 1,
+                            'energy': 0.5,
+                            'danceability': 0.5,
+                            'valence': 0.5,
+                            'acousticness': 0.3,
+                            'instrumentalness': 0.0,
+                            'liveness': 0.2,
+                            'loudness': -5.0
+                        }
+                    except Exception as e:
+                        print(f"⚠️  Error connecting to Last.fm: {e}")
+                        print("⚠️  Using default audio features")
+                        audio_features = {
+                            'tempo': 120,
+                            'key': 0,
+                            'mode': 1,
+                            'energy': 0.5,
+                            'danceability': 0.5,
+                            'valence': 0.5,
+                            'acousticness': 0.3,
+                            'instrumentalness': 0.0,
+                            'liveness': 0.2,
+                            'loudness': -5.0
+                        }
         
         # ==================== COMMON FLOW ====================
         # Convert to Strudel
