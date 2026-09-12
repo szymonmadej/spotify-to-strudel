@@ -18,7 +18,7 @@ def main():
     
     parser.add_argument(
         'track_id',
-        help='Spotify track ID or URL'
+        help='Spotify track ID/URL or Last.fm URL'
     )
     parser.add_argument(
         '-o', '--output',
@@ -34,81 +34,128 @@ def main():
     args = parser.parse_args()
     
     try:
-        # Initialize Spotify handler
-        print("🎵 Connecting to Spotify API...")
-        spotify = SpotifyHandler()
+        # Determine if input is Last.fm or Spotify URL
+        input_url = args.track_id
+        is_lastfm = 'last.fm' in input_url.lower()
         
-        # Get track ID from URL if needed
-        track_id = args.track_id
-        if track_id.startswith('http'):
-            print("📎 Parsing Spotify URL...")
-            track_id = spotify.get_track_by_url(track_id)
-            if not track_id:
-                print("❌ Invalid Spotify URL")
+        # ==================== LAST.FM FLOW ====================
+        if is_lastfm:
+            print("🎵 Using Last.fm data source...")
+            lastfm = LastFMHandler()
+            
+            # Parse Last.fm URL
+            print("📎 Parsing Last.fm URL...")
+            parsed = lastfm.parse_lastfm_url(input_url)
+            if not parsed:
+                print("❌ Invalid Last.fm URL")
                 return 1
-        
-        # Fetch track info
-        print(f"🔍 Fetching track information...")
-        track_info = spotify.get_track_info(track_id)
-        if not track_info:
-            print("❌ Could not fetch track information")
-            return 1
-        
-        print(f"✅ Found: {track_info['name']} by {track_info['artist']}")
-        
-        # Try to get audio features from Spotify first
-        audio_features = None
-        print(f"📊 Analyzing audio features...")
-        audio_features = spotify.get_audio_features(track_id)
-        
-        # If Spotify audio-features fails, use Last.fm
-        if not audio_features:
-            print("⚠️  Spotify audio-features unavailable, using Last.fm analysis...")
-            try:
-                lastfm = LastFMHandler()
-                tags = lastfm.get_track_tags(track_info['artist'], track_info['name'])
-                
-                if tags:
-                    print(f"✅ Found genres from Last.fm: {', '.join(tags[:3])}")
-                    audio_features = lastfm.infer_audio_features_from_tags(tags)
-                else:
-                    print("⚠️  No tags found on Last.fm, using defaults")
-                    audio_features = lastfm.infer_audio_features_from_tags([])
-                
-            except ValueError as e:
-                print(f"⚠️  Last.fm error: {e}")
-                print("⚠️  Using default audio features")
-                audio_features = {
-                    'tempo': 120,
-                    'key': 0,
-                    'mode': 1,
-                    'energy': 0.5,
-                    'danceability': 0.5,
-                    'valence': 0.5,
-                    'acousticness': 0.3,
-                    'instrumentalness': 0.0,
-                    'liveness': 0.2,
-                    'loudness': -5.0
-                }
-            except Exception as e:
-                print(f"⚠️  Error connecting to Last.fm: {e}")
-                print("⚠️  Using default audio features")
-                audio_features = {
-                    'tempo': 120,
-                    'key': 0,
-                    'mode': 1,
-                    'energy': 0.5,
-                    'danceability': 0.5,
-                    'valence': 0.5,
-                    'acousticness': 0.3,
-                    'instrumentalness': 0.0,
-                    'liveness': 0.2,
-                    'loudness': -5.0
-                }
-        else:
+            
+            artist, track = parsed
+            print(f"🔍 Found: {track} by {artist}")
+            
+            # Get track tags from Last.fm
+            print("📊 Analyzing audio features from Last.fm...")
+            tags = lastfm.get_track_tags(artist, track)
+            
+            if tags:
+                print(f"✅ Found genres: {', '.join(tags)}")
+            else:
+                print("⚠️  No genres found on Last.fm, using defaults")
+            
+            # Infer audio features from tags
+            audio_features = lastfm.infer_audio_features_from_tags(tags)
+            
+            # Create track info dict for converter
+            track_info = {
+                'name': track,
+                'artist': artist,
+                'duration_ms': 0,
+                'popularity': 0,
+                'external_urls': {}
+            }
+            
             print(f"✅ Tempo: {audio_features['tempo']} BPM")
-            print(f"✅ Key: {audio_features['key']}")
+            print(f"✅ Energy: {audio_features['energy']:.2f}")
+            
+        # ==================== SPOTIFY FLOW ====================
+        else:
+            print("🎵 Using Spotify data source...")
+            
+            # Initialize Spotify handler
+            print("🎵 Connecting to Spotify API...")
+            spotify = SpotifyHandler()
+            
+            # Get track ID from URL if needed
+            track_id = input_url
+            if track_id.startswith('http'):
+                print("📎 Parsing Spotify URL...")
+                track_id = spotify.get_track_by_url(track_id)
+                if not track_id:
+                    print("❌ Invalid Spotify URL")
+                    return 1
+            
+            # Fetch track info
+            print(f"🔍 Fetching track information...")
+            track_info = spotify.get_track_info(track_id)
+            if not track_info:
+                print("❌ Could not fetch track information")
+                return 1
+            
+            print(f"✅ Found: {track_info['name']} by {track_info['artist']}")
+            
+            # Try to get audio features from Spotify first
+            print(f"📊 Analyzing audio features...")
+            audio_features = spotify.get_audio_features(track_id)
+            
+            # If Spotify audio-features fails, use Last.fm
+            if not audio_features:
+                print("⚠️  Spotify audio-features unavailable, using Last.fm analysis...")
+                try:
+                    lastfm = LastFMHandler()
+                    tags = lastfm.get_track_tags(track_info['artist'], track_info['name'])
+                    
+                    if tags:
+                        print(f"✅ Found genres from Last.fm: {', '.join(tags[:3])}")
+                        audio_features = lastfm.infer_audio_features_from_tags(tags)
+                    else:
+                        print("⚠️  No tags found on Last.fm, using defaults")
+                        audio_features = lastfm.infer_audio_features_from_tags([])
+                    
+                except ValueError as e:
+                    print(f"⚠️  Last.fm error: {e}")
+                    print("⚠️  Using default audio features")
+                    audio_features = {
+                        'tempo': 120,
+                        'key': 0,
+                        'mode': 1,
+                        'energy': 0.5,
+                        'danceability': 0.5,
+                        'valence': 0.5,
+                        'acousticness': 0.3,
+                        'instrumentalness': 0.0,
+                        'liveness': 0.2,
+                        'loudness': -5.0
+                    }
+                except Exception as e:
+                    print(f"⚠️  Error connecting to Last.fm: {e}")
+                    print("⚠️  Using default audio features")
+                    audio_features = {
+                        'tempo': 120,
+                        'key': 0,
+                        'mode': 1,
+                        'energy': 0.5,
+                        'danceability': 0.5,
+                        'valence': 0.5,
+                        'acousticness': 0.3,
+                        'instrumentalness': 0.0,
+                        'liveness': 0.2,
+                        'loudness': -5.0
+                    }
+            else:
+                print(f"✅ Tempo: {audio_features['tempo']} BPM")
+                print(f"✅ Key: {audio_features['key']}")
         
+        # ==================== COMMON FLOW ====================
         # Convert to Strudel
         print(f"🎼 Generating Strudel code...")
         converter = StrudelConverter(track_info, audio_features)
@@ -138,6 +185,8 @@ def main():
         return 1
     except Exception as e:
         print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
         return 1
 
 
