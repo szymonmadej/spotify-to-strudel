@@ -1,5 +1,6 @@
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
+from spotipy.exceptions import SpotifyException
 import os
 from dotenv import load_dotenv
 
@@ -93,16 +94,15 @@ class SpotifyHandler:
                 'loudness': features.get('loudness', default_features['loudness']),
                 'speechiness': features.get('speechiness', default_features['speechiness'])
             }
-        except spotipy.exceptions.SpotifyException as e:
+        except SpotifyException as e:
             if e.http_status == 403:
                 print("⚠️  Access to audio features denied (403), using default values")
                 print("    This might be due to API permissions or regional restrictions")
             else:
-                print(f"Error fetching audio features: {e}")
+                print(f"⚠️  Spotify API error: {e}")
             return default_features
         except Exception as e:
             print(f"⚠️  Could not fetch audio features ({type(e).__name__}), using defaults")
-            print(f"    Error: {e}")
             return default_features
     
     def get_track_by_url(self, url):
