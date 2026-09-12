@@ -68,7 +68,7 @@ class LastFMHandler:
                 'format': 'json'
             }
             
-            response = requests.get(self.base_url, params=params)
+            response = requests.get(self.base_url, params=params, timeout=5)
             response.raise_for_status()
             data = response.json()
             
@@ -76,7 +76,7 @@ class LastFMHandler:
             return [tag['name'] for tag in tags[:5]] if tags else []
             
         except Exception as e:
-            print(f"Error fetching tags from Last.fm: {e}")
+            print(f"Debug: Error fetching tags from Last.fm: {e}")
             return []
     
     def get_artist_info(self, artist: str):
@@ -97,7 +97,7 @@ class LastFMHandler:
                 'format': 'json'
             }
             
-            response = requests.get(self.base_url, params=params)
+            response = requests.get(self.base_url, params=params, timeout=5)
             response.raise_for_status()
             data = response.json()
             
@@ -112,7 +112,7 @@ class LastFMHandler:
             return None
             
         except Exception as e:
-            print(f"Error fetching artist info from Last.fm: {e}")
+            print(f"Debug: Error fetching artist info from Last.fm: {e}")
             return None
     
     def infer_audio_features_from_tags(self, tags: list) -> dict:
@@ -127,34 +127,39 @@ class LastFMHandler:
         """
         # Map genres to estimated audio characteristics
         genre_mapping = {
-            'electronic': {'energy': 0.7, 'danceability': 0.8, 'valence': 0.6},
-            'techno': {'energy': 0.8, 'danceability': 0.9, 'valence': 0.5},
-            'house': {'energy': 0.75, 'danceability': 0.85, 'valence': 0.7},
-            'edm': {'energy': 0.85, 'danceability': 0.85, 'valence': 0.7},
-            'deep house': {'energy': 0.6, 'danceability': 0.75, 'valence': 0.6},
-            'dnb': {'energy': 0.9, 'danceability': 0.8, 'valence': 0.5},
-            'drum and bass': {'energy': 0.9, 'danceability': 0.8, 'valence': 0.5},
-            'ambient': {'energy': 0.3, 'danceability': 0.2, 'valence': 0.5},
-            'experimental': {'energy': 0.6, 'danceability': 0.4, 'valence': 0.4},
-            'indie': {'energy': 0.6, 'danceability': 0.5, 'valence': 0.6},
-            'pop': {'energy': 0.7, 'danceability': 0.7, 'valence': 0.8},
-            'rock': {'energy': 0.8, 'danceability': 0.5, 'valence': 0.6},
-            'hip-hop': {'energy': 0.8, 'danceability': 0.75, 'valence': 0.5},
-            'rap': {'energy': 0.8, 'danceability': 0.75, 'valence': 0.5},
-            'jazz': {'energy': 0.6, 'danceability': 0.6, 'valence': 0.7},
-            'classical': {'energy': 0.5, 'danceability': 0.2, 'valence': 0.6},
-            'metal': {'energy': 0.9, 'danceability': 0.4, 'valence': 0.3},
-            'punk': {'energy': 0.9, 'danceability': 0.6, 'valence': 0.4},
-            'folk': {'energy': 0.4, 'danceability': 0.3, 'valence': 0.6},
-            'indie pop': {'energy': 0.65, 'danceability': 0.6, 'valence': 0.7},
-            'synth': {'energy': 0.75, 'danceability': 0.75, 'valence': 0.6},
-            'synthwave': {'energy': 0.7, 'danceability': 0.7, 'valence': 0.6},
-            'lo-fi': {'energy': 0.3, 'danceability': 0.4, 'valence': 0.6},
-            'chill': {'energy': 0.4, 'danceability': 0.4, 'valence': 0.6},
+            'electronic': {'energy': 0.7, 'danceability': 0.8, 'valence': 0.6, 'tempo': 120},
+            'techno': {'energy': 0.8, 'danceability': 0.9, 'valence': 0.5, 'tempo': 128},
+            'house': {'energy': 0.75, 'danceability': 0.85, 'valence': 0.7, 'tempo': 120},
+            'edm': {'energy': 0.85, 'danceability': 0.85, 'valence': 0.7, 'tempo': 128},
+            'deep house': {'energy': 0.6, 'danceability': 0.75, 'valence': 0.6, 'tempo': 115},
+            'dnb': {'energy': 0.9, 'danceability': 0.8, 'valence': 0.5, 'tempo': 175},
+            'drum and bass': {'energy': 0.9, 'danceability': 0.8, 'valence': 0.5, 'tempo': 175},
+            'ambient': {'energy': 0.3, 'danceability': 0.2, 'valence': 0.5, 'tempo': 80},
+            'experimental': {'energy': 0.6, 'danceability': 0.4, 'valence': 0.4, 'tempo': 110},
+            'indie': {'energy': 0.6, 'danceability': 0.5, 'valence': 0.6, 'tempo': 110},
+            'pop': {'energy': 0.7, 'danceability': 0.7, 'valence': 0.8, 'tempo': 120},
+            'rock': {'energy': 0.8, 'danceability': 0.5, 'valence': 0.6, 'tempo': 115},
+            'hip-hop': {'energy': 0.8, 'danceability': 0.75, 'valence': 0.5, 'tempo': 100},
+            'rap': {'energy': 0.8, 'danceability': 0.75, 'valence': 0.5, 'tempo': 100},
+            'jazz': {'energy': 0.6, 'danceability': 0.6, 'valence': 0.7, 'tempo': 110},
+            'classical': {'energy': 0.5, 'danceability': 0.2, 'valence': 0.6, 'tempo': 90},
+            'metal': {'energy': 0.9, 'danceability': 0.4, 'valence': 0.3, 'tempo': 130},
+            'punk': {'energy': 0.9, 'danceability': 0.6, 'valence': 0.4, 'tempo': 140},
+            'folk': {'energy': 0.4, 'danceability': 0.3, 'valence': 0.6, 'tempo': 95},
+            'indie pop': {'energy': 0.65, 'danceability': 0.6, 'valence': 0.7, 'tempo': 115},
+            'synth': {'energy': 0.75, 'danceability': 0.75, 'valence': 0.6, 'tempo': 125},
+            'synthwave': {'energy': 0.7, 'danceability': 0.7, 'valence': 0.6, 'tempo': 120},
+            'lo-fi': {'energy': 0.3, 'danceability': 0.4, 'valence': 0.6, 'tempo': 85},
+            'chill': {'energy': 0.4, 'danceability': 0.4, 'valence': 0.6, 'tempo': 90},
+            'dark': {'energy': 0.7, 'danceability': 0.6, 'valence': 0.3, 'tempo': 120},
+            'industrial': {'energy': 0.85, 'danceability': 0.7, 'valence': 0.3, 'tempo': 125},
         }
         
         # Default values
         features = {
+            'tempo': 120,
+            'key': 0,
+            'mode': 1,
             'energy': 0.5,
             'danceability': 0.5,
             'valence': 0.5,
@@ -166,7 +171,12 @@ class LastFMHandler:
         
         # Aggregate features from all tags
         if tags:
-            tag_features = {'energy': [], 'danceability': [], 'valence': []}
+            tag_features = {
+                'energy': [], 
+                'danceability': [], 
+                'valence': [],
+                'tempo': []
+            }
             
             for tag in tags:
                 tag_lower = tag.lower()
@@ -175,6 +185,7 @@ class LastFMHandler:
                         tag_features['energy'].append(props.get('energy', 0.5))
                         tag_features['danceability'].append(props.get('danceability', 0.5))
                         tag_features['valence'].append(props.get('valence', 0.5))
+                        tag_features['tempo'].append(props.get('tempo', 120))
             
             # Average the values from all matching tags
             if tag_features['energy']:
@@ -183,5 +194,7 @@ class LastFMHandler:
                 features['danceability'] = sum(tag_features['danceability']) / len(tag_features['danceability'])
             if tag_features['valence']:
                 features['valence'] = sum(tag_features['valence']) / len(tag_features['valence'])
+            if tag_features['tempo']:
+                features['tempo'] = int(sum(tag_features['tempo']) / len(tag_features['tempo']))
         
         return features
