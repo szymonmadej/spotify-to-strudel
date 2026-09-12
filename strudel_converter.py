@@ -25,18 +25,15 @@ class StrudelConverter:
         note = NOTE_NAMES.get(key % 12, 'c')
         return f"{note}{octave}"
     
-    def _get_scale_pattern(self, key: int, mode: int) -> str:
-        """Generate a scale pattern based on key and mode"""
-        root_note = self._get_note_name(key)
-        mode_name = MODE_NAMES.get(mode, 'major')
-        return f"scale('[{root_note}] {mode_name}')"
+    def _get_scale_name(self, mode: int) -> str:
+        """Get scale name from mode"""
+        return MODE_NAMES.get(mode, 'major')
     
-    def _calculate_note_duration(self, tempo: float) -> str:
-        """Calculate note durations based on tempo"""
-        # Assuming 4/4 time signature
-        # At 120 BPM, a quarter note = 0.5 seconds
-        beat_duration = 60 / tempo
-        return f"// Beat duration at {tempo} BPM: ~{beat_duration:.2f}s"
+    def _calculate_cps(self, tempo: float) -> float:
+        """Calculate cycles per second from BPM"""
+        # BPM to cycles per second
+        # At 120 BPM and 4/4 time: 1 cycle = 1 bar = 4 beats
+        return tempo / 120 / 4
     
     def _generate_bass_pattern(self) -> str:
         """Generate a bass pattern based on audio features"""
@@ -45,31 +42,37 @@ class StrudelConverter:
         
         # More energetic = faster bass pattern
         if energy > 0.7:
-            pattern = f'"{root} - {root}:0.5 - {root}:0.5"'
+            # Energetic: fast, repeated notes
+            pattern = f'"{root}2 ~ {root}4 ~ {root}4"'
         elif energy > 0.4:
-            pattern = f'"{root} - - {root}:0.5"'
+            # Medium: moderate pattern
+            pattern = f'"{root}2 ~ ~ {root}4"'
         else:
-            pattern = f'"{root} - - -"'
+            # Low energy: sparse pattern
+            pattern = f'"{root} ~ ~ ~"'
         
-        return f"bass = s('sine').note({pattern}.fast(2)).gain(0.3)"
+        return f"bass = s('sine').note({pattern}).gain(0.3)"
     
     def _generate_chord_pattern(self) -> str:
         """Generate chord pattern based on key and mode"""
         key = self.audio_features['key']
         mode = self.audio_features['mode']
         root_note = self._get_note_name(key)
-        mode_name = MODE_NAMES.get(mode, 'major')
+        mode_name = self._get_scale_name(mode)
         danceability = self.audio_features['danceability']
         
-        # Generate chords based on danceability
+        # Generate chord intervals based on danceability
         if danceability > 0.7:
-            chords = '"[0,2,4] [1,3,5] [2,4,6] [1,3,5]"'
+            # Very danceable: complex chords
+            chords = '"[0,2,4]2 [2,4,6]2 [4,6,8]2 [2,4,6]2"'
         elif danceability > 0.4:
-            chords = '"[0,2,4] - - [1,3,5]"'
+            # Moderately danceable
+            chords = '"[0,2,4]2 ~ ~ [2,4,6]2"'
         else:
-            chords = '"[0,2,4] - - -"'
+            # Less danceable: simpler chords
+            chords = '"[0,2,4]2 ~ ~ ~"'
         
-        return f"chords = s('sine').scale('[{root_note}] {mode_name}').note({chords}.fast(1)).gain(0.4)"
+        return f"chords = s('sine').scale('[{root_note}] {mode_name}').note({chords}).gain(0.4)"
     
     def _generate_melody_pattern(self) -> str:
         """Generate melody pattern based on valence and energy"""
@@ -77,20 +80,20 @@ class StrudelConverter:
         energy = self.audio_features['energy']
         key = self.audio_features['key']
         root_note = self._get_note_name(key)
-        mode_name = MODE_NAMES.get(self.audio_features['mode'], 'major')
+        mode_name = self._get_scale_name(self.audio_features['mode'])
         
         # Happy/positive = higher notes, energetic = faster
         if valence > 0.6 and energy > 0.6:
-            melody = '"[0,4] [2,5] [4,7] [5,9]"'
-            speed = ".fast(2)"
+            # Happy and energetic: fast, high notes
+            melody = '"[0,4]4 [2,5]4 [4,7]4 [5,9]4"'
         elif valence > 0.4:
+            # Moderately happy
             melody = '"0 2 4 5 4 2"'
-            speed = ".fast(1.5)"
         else:
-            melody = '"0 - 2 - 4 -"'
-            speed = ".fast(1)"
+            # Sad or melancholic: slower, lower
+            melody = '"0 ~ 2 ~ 4 ~"'
         
-        return f"melody = s('sine').scale('[{root_note}] {mode_name}').note({melody}{speed}).gain(0.3)"
+        return f"melody = s('sine').scale('[{root_note}] {mode_name}').note({melody}).gain(0.3)"
     
     def generate(self) -> str:
         """Generate complete Strudel code"""
@@ -100,15 +103,12 @@ class StrudelConverter:
         self.code.append("// Generated Strudel code from Spotify")
         self.code.append(f"// Track: {self.track_info['name']} by {self.track_info['artist']}")
         self.code.append(f"// Tempo: {self.audio_features['tempo']} BPM")
-        self.code.append(f"// Key: {self._get_note_name(self.audio_features['key'])} {MODE_NAMES.get(self.audio_features['mode'], 'major')}")
+        self.code.append(f"// Key: {self._get_note_name(self.audio_features['key'])} {self._get_scale_name(self.audio_features['mode'])}")
         self.code.append("")
         
         # Tempo setting
-        self.code.append(f"setcps({self.audio_features['tempo'] / 120 / 4}) // {self.audio_features['tempo']} BPM")
-        self.code.append("")
-        
-        # Duration info
-        self.code.append(self._calculate_note_duration(self.audio_features['tempo']))
+        cps = self._calculate_cps(self.audio_features['tempo'])
+        self.code.append(f"setcps({cps:.4f}) // {self.audio_features['tempo']} BPM")
         self.code.append("")
         
         # Bass pattern
@@ -128,11 +128,7 @@ class StrudelConverter:
         
         # Combined pattern
         self.code.append("// Combined arrangement")
-        self.code.append("stack(")
-        self.code.append("  bass,")
-        self.code.append("  chords,")
-        self.code.append("  melody")
-        self.code.append(")")
+        self.code.append("stack(bass, chords, melody)")
         self.code.append("")
         
         # Audio features as comments
